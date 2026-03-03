@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
 import User from "../models/user.model";
+import { OAuth2Client } from "google-auth-library";
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 //
 // ✅ REGISTER
@@ -100,6 +103,71 @@ export const loginUser = async (req: Request, res: Response) => {
   }
 };
 
+
+
+interface GoogleRequestBody {
+  credential: string;
+}
+
+export const googleLogin = async (
+  req: Request<{}, {}, GoogleRequestBody>,
+  res: Response
+): Promise<void> => {
+  try {
+    const { credential } = req.body;
+
+    if (!credential) {
+      res.status(400).json({ message: "Credential is required" });
+      return;
+    }
+
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    if (!payload || !payload.email) {
+      res.status(401).json({ message: "Invalid Google token" });
+      return;
+    }
+
+    const { email, name } = payload;
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = await User.create({
+        name: name || "Google User",
+        email,
+        password: undefined, // Google accounts don't use password
+      });
+    }
+
+    const refreshToken = user.generateRefreshToken();
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(200).json({
+      message: "Google login successful",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+      },
+    });
+
+  } catch (error) {
+    console.error("Google Login Error:", error);
+    res.status(401).json({ message: "Google login failed" });
+  }
+};
 
 //
 // ✅ REFRESH ACCESS TOKEN
