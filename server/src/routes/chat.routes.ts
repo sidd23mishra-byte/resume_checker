@@ -1,17 +1,15 @@
 import express from "express";
 import { authMiddleware } from "../middleware/auth.middleware";
-import { checkCredits } from "../middleware/credit.middleware";
-import { saveUserMessage } from "../middleware/saveMessage.middleware";
-import { sendMessageToAI } from "../controllers/chat.controller";
+import { sendMessageToAI, getChatHistory, createNewChat } from "../controllers/chat.controller";
 
 const router = express.Router();
 
-router.post(
-  "/send",
-  authMiddleware,
-  checkCredits,
-  saveUserMessage,
-  sendMessageToAI
-);
+// Send message (create new chat if needed)
+router.post("/send",authMiddleware, sendMessageToAI);
+
+// Fetch all user chats with messages
+router.get("/history", authMiddleware, getChatHistory);
+
+router.post("/new", authMiddleware, createNewChat);
 
 export default router;
